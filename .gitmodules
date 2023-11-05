@@ -1,3 +1,6 @@
 [submodule "thirdparty/tesseract"]
 	path = thirdparty/tesseract
 	url = https://github.com/tesseract-ocr/tesseract
+[submodule "thirdparty/tesseract-ocr-ios"]
+	path = thirdparty/tesseract-ocr-ios
+	url = https://github.com/gali8/Tesseract-OCR-iOS

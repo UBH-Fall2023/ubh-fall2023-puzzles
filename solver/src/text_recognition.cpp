@@ -56,8 +56,26 @@ int recognize_number(cv::Mat& frame) {
   return atoi(text);
 }
 
+#ifdef SOLVER_IOS
+# import <Foundation/Foundation.h>
+#endif
+
 std::array<std::array<int, 9>, 9> recognize_board_numbers(std::array<cv::Mat, 81>& frame) {
-  g_tess.Init(NULL, "eng", tesseract::OEM_LSTM_ONLY);
+  const char* path = nullptr;
+#ifdef SOLVER_IOS
+  NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
+  NSLog(@"Bundle Pathh: %@", bundlePath);
+  path = [bundlePath UTF8String];
+#endif
+
+  g_tess.Init(path, "eng",
+#ifdef SOLVER_IOS
+                                          
+              tesseract::OEM_DEFAULT);
+#else
+              tesseract::OEM_LSTM_ONLY);
+#endif
+  
   g_tess.SetPageSegMode(tesseract::PSM_SINGLE_CHAR);
 
   std::array<std::array<int, 9>, 9> grid;
