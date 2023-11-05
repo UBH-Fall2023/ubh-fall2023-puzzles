@@ -1,6 +1,6 @@
 #include <solver/board_detection.h>
 
-static cv::Mat prepare_frame(cv::Mat& frame) {
+cv::Mat prepare_frame(cv::Mat& frame) {
   cv::Mat output;
 
   // Convert to grayscale.
@@ -24,27 +24,7 @@ static cv::Mat prepare_frame(cv::Mat& frame) {
   return output;
 }
 
-static void draw_line(cv::Mat& frame, cv::Vec4i& line) {
-  /* cv::line(frame, cv::Point2i(line[0], line[1]), cv::Point2i(line[2], line[3]), cv::Scalar(0, 255, 0), 2); */
-  // draw point
-  cv::circle(frame, cv::Point2i(line[0], line[1]), 2, cv::Scalar(0, 255, 0), 2);
-  cv::circle(frame, cv::Point2i(line[2], line[3]), 2, cv::Scalar(0, 255, 0), 2);
-}
-
-static std::vector<cv::Vec4i> merge_lines(cv::Mat& frame, std::vector<cv::Vec4i>& lines) {
-  std::vector<cv::Vec4i> merged_lines;
-
-  int height = frame.rows,
-      width = frame.cols;
-
-  for (auto& line : lines) {
-
-  }
-
-  return merged_lines;
-}
-
-static cv::Mat crop_to_board(cv::Mat& frame) {
+std::array<cv::Point2f, 4> find_corners(cv::Mat& frame) {
   cv::Mat output = frame.clone();
   // Flood filling to find the biggest blob in the picture.
 
@@ -72,8 +52,8 @@ static cv::Mat crop_to_board(cv::Mat& frame) {
   cv::floodFill(output, max_point, cv::Scalar(255));
 
   // Erode
-  cv::Mat kernel = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-  cv::erode(output, output, kernel);
+  /* cv::Mat kernel = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3)); */
+  /* cv::erode(output, output, kernel); */
 
   // Flood fill the rest with black.
   for (int y = 0; y < height; ++y) {
@@ -88,12 +68,6 @@ static cv::Mat crop_to_board(cv::Mat& frame) {
   // Use "Hough Transform" to detect the lines.
   std::vector<cv::Vec4i> lines;
   cv::HoughLinesP(output, lines, 1, CV_PI / 180, 200);
-
-  cv::cvtColor(output, output, cv::COLOR_GRAY2BGR);
-
-  /* for (auto& line : lines) { */
-  /*   draw_line(output, line); */
-  /* } */
 
   // Find outermost corners
   cv::Point2f max_x(0, 0),
@@ -150,7 +124,7 @@ static cv::Mat crop_to_board(cv::Mat& frame) {
   cv::Point2f left[2] = {xsorted[2], xsorted[3]};
   cv::Point2f right[2] = {xsorted[0], xsorted[1]};
 
-  cv::Point2f corners[4];
+  std::array<cv::Point2f, 4> corners;
   corners[0] = top[0].x < top[1].x ? top[0] : top[1];
   corners[1] = top[0].x > top[1].x ? top[0] : top[1];
   corners[2] = bottom[0].x > bottom[1].x ? bottom[0] : bottom[1];
@@ -158,12 +132,10 @@ static cv::Mat crop_to_board(cv::Mat& frame) {
 
 #define CLOSE_PROXIMITY 500
 
-  static int counter = 0;
   if (cv::norm(top[0] - top[1]) < CLOSE_PROXIMITY ||
       cv::norm(bottom[0] - bottom[1]) < CLOSE_PROXIMITY ||
       cv::norm(left[0] - left[1]) < CLOSE_PROXIMITY ||
       cv::norm(right[0] - right[1]) < CLOSE_PROXIMITY) {
-    std::cout << "issue? " << counter++ << std::endl;
 
     corners[0] = cv::Point2f(min_x.x, min_y.y);
     corners[1] = cv::Point2f(max_x.x, min_y.y);
@@ -171,15 +143,18 @@ static cv::Mat crop_to_board(cv::Mat& frame) {
     corners[3] = cv::Point2f(min_x.x, max_y.y);
   }
 
-  cv::line(output, corners[0], corners[1], cv::Scalar(0, 0, 255), 5);
-  cv::line(output, corners[1], corners[2], cv::Scalar(0, 0, 255), 5);
-  cv::line(output, corners[2], corners[3], cv::Scalar(0, 0, 255), 5);
-  cv::line(output, corners[3], corners[0], cv::Scalar(0, 0, 255), 5);
+  cv::absdiff(frame, output, frame);
 
-  // Warp the image to a square using the corners.
-  cv::Point2f src[4] = {corners[0], corners[1], corners[2], corners[3]};
+  return corners;
+}
+
+static cv::Mat crop_to_board(cv::Mat& frame, std::array<cv::Point2f, 4>& _corners) {
+  cv::Point2f* corners = _corners.data();
+
+  cv::Mat output;
+
   cv::Point2f dst[4] = {cv::Point2f(0, 0), cv::Point2f(256, 0), cv::Point2f(256, 256), cv::Point2f(0, 256)};
-  cv::Mat transform = cv::getPerspectiveTransform(src, dst);
+  cv::Mat transform = cv::getPerspectiveTransform(corners, dst);
   cv::warpPerspective(frame, output, transform, cv::Size(256, 256));
 
   return output;
@@ -188,7 +163,9 @@ static cv::Mat crop_to_board(cv::Mat& frame) {
 std::array<cv::Mat, 81> detect_board(cv::Mat& frame) {
   cv::Mat output = prepare_frame(frame);
 
-  cv::Mat grid = crop_to_board(output);
+  std::array<cv::Point2f, 4> corners = find_corners(output);
+
+  frame = crop_to_board(output, corners);
 
   // split grid into 9x9 grid.
   std::array<cv::Mat, 81> grid_pieces;
@@ -196,7 +173,10 @@ std::array<cv::Mat, 81> detect_board(cv::Mat& frame) {
     for (int x = 0; x < 9; ++x) {
 
       cv::Rect roi(x * 28, y * 28, 28, 28);
-      grid_pieces[y * 9 + x] = grid(roi);
+      frame(roi).copyTo(grid_pieces[y * 9 + x]);
+
+      cv::Mat kernel = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(1, 1));
+      cv::erode(grid_pieces[y * 9 + x], grid_pieces[y * 9 + x], kernel);
     }
   }
 
