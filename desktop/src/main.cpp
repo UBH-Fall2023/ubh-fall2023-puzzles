@@ -1,5 +1,5 @@
 #include <solver/solver.h>
-
+#include <solver/textRecognition.h>
 #include <opencv2/highgui/highgui.hpp>
 
 int main(int argc, char** argv) {
@@ -11,8 +11,9 @@ int main(int argc, char** argv) {
   }
 
   cv::Mat frame, output_frame;
-  while (1) {
+  
     // Capture the frame.
+      /*
     capture >> frame;
     if (frame.empty()) {
       std::cout << "No captured frame" << std::endl;
@@ -23,11 +24,12 @@ int main(int argc, char** argv) {
 
     // Present the frame.
     cv::imshow("Frame", output_frame);
-
+    */
     // Quit if ESC pressed.
-    char c = (char)cv::waitKey(25);
-    if (c == 27) break;
-  }
+
+
+
+  
 
   return 0;
 }
